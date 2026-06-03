@@ -7,6 +7,8 @@ const morgan = require('morgan');
 const config = require('./config');
 const connectDB = require('./database');
 const routes = require('./routes');
+const AppError = require('./utils/AppError');
+const globalErrorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -49,13 +51,17 @@ if (config.env === 'development') {
 // Mount all API routes
 app.use(`/api/${config.apiVersion}`, routes);
 
-// Fallback Route Handler for 404 (Not Found)
-app.use('*', (req, res) => {
-  res.status(404).json({
-    status: 'fail',
-    message: `Resource not found: ${req.originalUrl}`
-  });
+// Fallback Route Handler for 404 (Not Found) - passes error to global handler
+app.use('*', (req, res, next) => {
+  next(new AppError(`Resource not found: ${req.originalUrl}`, 404));
 });
+
+// ==========================================
+// 🚨 GLOBAL ERROR HANDLER
+// ==========================================
+// Must be declared AFTER all routes and middleware
+// Express identifies it as error middleware because it has 4 parameters: (err, req, res, next)
+app.use(globalErrorHandler);
 
 // ==========================================
 // 🚀 SERVER INIT
@@ -89,5 +95,33 @@ const shutdown = () => {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// ==========================================
+// 💥 PROCESS-LEVEL EXCEPTION HANDLERS
+// ==========================================
+
+/**
+ * uncaughtException — synchronous programming errors (e.g. undefined variable).
+ * Must be set up BEFORE server starts to catch startup-phase errors.
+ * The process MUST exit after an uncaught exception — the app state is unknown.
+ */
+process.on('uncaughtException', (err) => {
+  console.error('💥 UNCAUGHT EXCEPTION! Shutting down...');
+  console.error(`${err.name}: ${err.message}`);
+  process.exit(1);
+});
+
+/**
+ * unhandledRejection — async errors where a Promise was rejected but no .catch() handled it.
+ * e.g. a mongoose query that failed without a try/catch wrapper.
+ * We close the server gracefully, then exit.
+ */
+process.on('unhandledRejection', (err) => {
+  console.error('💥 UNHANDLED PROMISE REJECTION! Shutting down...');
+  console.error(`${err.name}: ${err.message}`);
+  server.close(() => {
+    process.exit(1);
+  });
+});
 
 module.exports = app;
