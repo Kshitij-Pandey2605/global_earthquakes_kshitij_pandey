@@ -5,33 +5,49 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/responseFormatter');
 
-// Helper to sign JWT tokens
-const signToken = (id) => {
+// Helper to sign Access Token (short-lived)
+const signAccessToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'super_secret_jwt_signing_key_change_me_in_production', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    expiresIn: process.env.JWT_EXPIRES_IN || '15m'
   });
 };
 
-// Helper to format and send JWT token
-const createSendToken = (user, statusCode, res) => {
-  const token = signToken(user._id);
+// Helper to sign Refresh Token (long-lived)
+const signRefreshToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET || 'another_super_secret_refresh_key_change_me_in_production', {
+    expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d'
+  });
+};
+
+// Helper to format and send JWT tokens (Access token in body, Refresh token in secure cookie)
+const createSendToken = async (user, statusCode, res) => {
+  const accessToken = signAccessToken(user._id);
+  const refreshToken = signRefreshToken(user._id);
+
+  // Store the new refresh token in the user's document
+  await User.findByIdAndUpdate(user._id, {
+    $push: { refreshTokens: refreshToken }
+  });
 
   const cookieOptions = {
     expires: new Date(
       Date.now() + (parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 7) * 24 * 60 * 60 * 1000
     ),
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || res.req.secure || res.req.headers['x-forwarded-proto'] === 'https'
+    secure: process.env.NODE_ENV === 'production' || res.req.secure || res.req.headers['x-forwarded-proto'] === 'https',
+    sameSite: 'strict'
   };
 
-  res.cookie('jwt', token, cookieOptions);
+  res.cookie('jwt', accessToken, cookieOptions);
+  res.cookie('refreshToken', refreshToken, cookieOptions);
 
   // Hide password in output
   user.password = undefined;
 
   res.status(statusCode).json({
     status: 'success',
-    token,
+    token: accessToken,
+    refreshToken, // Return refresh token in body for developer convenience
     data: {
       user
     }
@@ -52,7 +68,7 @@ const register = asyncHandler(async (req, res, next) => {
     role: 'user' // Default to standard user
   });
 
-  createSendToken(newUser, 201, res);
+  await createSendToken(newUser, 201, res);
 });
 
 /**
@@ -76,7 +92,7 @@ const login = asyncHandler(async (req, res, next) => {
   }
 
   // 3) If everything ok, send token to client
-  createSendToken(user, 200, res);
+  await createSendToken(user, 200, res);
 });
 
 /**
@@ -85,10 +101,28 @@ const login = asyncHandler(async (req, res, next) => {
  * @access    Public
  */
 const logout = asyncHandler(async (req, res, next) => {
-  res.cookie('jwt', 'loggedout', {
-    expires: new Date(Date.now() + 10 * 1000),
-    httpOnly: true
-  });
+  let token;
+  if (req.cookies && req.cookies.refreshToken) {
+    token = req.cookies.refreshToken;
+  } else if (req.body.refreshToken) {
+    token = req.body.refreshToken;
+  }
+
+  // If there's a refresh token, remove it from the user's active tokens list
+  if (token) {
+    try {
+      const refreshSecret = process.env.JWT_REFRESH_SECRET || 'another_super_secret_refresh_key_change_me_in_production';
+      const decoded = jwt.verify(token, refreshSecret);
+      await User.findByIdAndUpdate(decoded.id, {
+        $pull: { refreshTokens: token }
+      });
+    } catch (err) {
+      // Ignore invalid token verification errors during logout
+    }
+  }
+
+  res.clearCookie('jwt');
+  res.clearCookie('refreshToken');
   
   res.status(200).json({
     status: 'success',
@@ -143,7 +177,7 @@ const changePassword = asyncHandler(async (req, res, next) => {
   await user.save();
 
   // 4) Log user in with new token
-  createSendToken(user, 200, res);
+  await createSendToken(user, 200, res);
 });
 
 /**
@@ -204,7 +238,75 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   await user.save();
 
   // 3) Log the user in, send JWT
-  createSendToken(user, 200, res);
+  await createSendToken(user, 200, res);
+});
+
+/**
+ * @desc      Refresh Access Token
+ * @route     POST /api/v1/auth/refresh
+ * @access    Public
+ */
+const refreshToken = asyncHandler(async (req, res, next) => {
+  let token;
+  if (req.cookies && req.cookies.refreshToken) {
+    token = req.cookies.refreshToken;
+  } else if (req.body.refreshToken) {
+    token = req.body.refreshToken;
+  }
+
+  if (!token) {
+    return next(new AppError('No refresh token provided.', 401));
+  }
+
+  // Verify token signature against JWT_REFRESH_SECRET
+  const refreshSecret = process.env.JWT_REFRESH_SECRET || 'another_super_secret_refresh_key_change_me_in_production';
+  let decoded;
+  try {
+    decoded = jwt.verify(token, refreshSecret);
+  } catch (err) {
+    return next(new AppError('Invalid or expired refresh token.', 401));
+  }
+
+  // Find user and explicitly select refreshTokens
+  const user = await User.findById(decoded.id).select('+refreshTokens');
+  if (!user) {
+    return next(new AppError('The user belonging to this token no longer exists.', 401));
+  }
+
+  // Check for token reuse / theft detection
+  if (!user.refreshTokens || !user.refreshTokens.includes(token)) {
+    // REUSE DETECTED: clear all refresh tokens for this user as a precaution
+    user.refreshTokens = [];
+    await user.save({ validateBeforeSave: false });
+    return next(new AppError('Token reuse detected! All active sessions invalidated. Please log in again.', 403));
+  }
+
+  // Generate new rotated tokens
+  const newAccessToken = signAccessToken(user._id);
+  const newRefreshToken = signRefreshToken(user._id);
+
+  // Replace old refresh token with new one
+  user.refreshTokens = user.refreshTokens.filter(t => t !== token);
+  user.refreshTokens.push(newRefreshToken);
+  await user.save({ validateBeforeSave: false });
+
+  const cookieOptions = {
+    expires: new Date(
+      Date.now() + (parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 7) * 24 * 60 * 60 * 1000
+    ),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' || res.req.secure || res.req.headers['x-forwarded-proto'] === 'https',
+    sameSite: 'strict'
+  };
+
+  res.cookie('jwt', newAccessToken, cookieOptions);
+  res.cookie('refreshToken', newRefreshToken, cookieOptions);
+
+  res.status(200).json({
+    status: 'success',
+    token: newAccessToken,
+    refreshToken: newRefreshToken
+  });
 });
 
 module.exports = {
@@ -215,5 +317,6 @@ module.exports = {
   updateProfile,
   changePassword,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  refreshToken
 };

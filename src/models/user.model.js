@@ -40,6 +40,10 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
     select: false
+  },
+  refreshTokens: {
+    type: [String],
+    select: false
   }
 }, {
   timestamps: true,

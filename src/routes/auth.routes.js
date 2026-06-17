@@ -14,6 +14,7 @@ const validate = require('../middleware/validate');
 // Public endpoints
 router.post('/register', registerRules, validate, authController.register);
 router.post('/login', loginRules, validate, authController.login);
+router.post('/refresh', authController.refreshToken);
 router.post('/logout', authController.logout);
 router.post('/forgot-password', forgotPasswordRules, validate, authController.forgotPassword);
 router.post('/reset-password/:token', resetPasswordRules, validate, authController.resetPassword);
