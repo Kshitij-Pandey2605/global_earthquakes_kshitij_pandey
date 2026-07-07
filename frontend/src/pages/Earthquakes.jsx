@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import EarthquakeMap from '../components/EarthquakeMap';
 import {
   FiSearch,
   FiFilter,
@@ -17,6 +18,9 @@ import {
 
 const Earthquakes = () => {
   const { isAdmin } = useAuth();
+  
+  // View mode selection
+  const [viewMode, setViewMode] = useState('split'); // 'table', 'map', 'split'
   
   // Data list and loading states
   const [earthquakes, setEarthquakes] = useState([]);
@@ -213,15 +217,51 @@ const Earthquakes = () => {
           <h2 className="text-2xl font-bold text-slate-800">Seismic Ledger</h2>
           <p className="text-sm text-slate-500">Query, view, and administer global earthquake events.</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => openModal(null)}
-            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-indigo-600/10 self-start"
-          >
-            <FiPlus className="w-4 h-4" />
-            <span>Add Event</span>
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          {/* View Toggle Controls */}
+          <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex items-center space-x-1">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Table
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Map
+            </button>
+            <button
+              onClick={() => setViewMode('split')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
+                viewMode === 'split'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Split View
+            </button>
+          </div>
+
+          {isAdmin && (
+            <button
+              onClick={() => openModal(null)}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-indigo-600/10"
+            >
+              <FiPlus className="w-4 h-4" />
+              <span>Add Event</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Advanced Filters Panel */}
@@ -315,18 +355,40 @@ const Earthquakes = () => {
         </div>
       </div>
 
-      {/* Main Table Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-650" />
+      {/* Main Content Grid Area */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Map Panel */}
+        {(viewMode === 'map' || viewMode === 'split') && (
+          <div className={`${
+            viewMode === 'map' ? 'lg:col-span-12' : 'lg:col-span-5 lg:sticky lg:top-6'
+          } w-full`}>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="font-bold text-slate-800 text-sm">Seismic Activity View</h3>
+                <span className="text-xs text-slate-450 font-medium">Showing {earthquakes.length} events</span>
+              </div>
+              <EarthquakeMap earthquakes={earthquakes} height={viewMode === 'map' ? '550px' : '450px'} />
+            </div>
           </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center p-6">
-            <FiAlertTriangle className="w-8 h-8 text-rose-550 mb-2" />
-            <p className="text-slate-700 font-semibold">{error}</p>
-          </div>
-        ) : (
+        )}
+
+        {/* Table Panel */}
+        {(viewMode === 'table' || viewMode === 'split') && (
+          <div className={`${
+            viewMode === 'table' ? 'lg:col-span-12' : 'lg:col-span-7'
+          } w-full`}>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-650" />
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center p-6">
+                  <FiAlertTriangle className="w-8 h-8 text-rose-550 mb-2" />
+                  <p className="text-slate-700 font-semibold">{error}</p>
+                </div>
+              ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left">
@@ -436,8 +498,11 @@ const Earthquakes = () => {
               </div>
             </div>
           </>
-        )}
+          )}
+        </div>
       </div>
+    )}
+  </div>
 
       {/* CREATE & EDIT MODAL DIALOG */}
       {modalOpen && (
