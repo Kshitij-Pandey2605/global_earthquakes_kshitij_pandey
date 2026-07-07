@@ -48,7 +48,7 @@ const Login = () => {
         </div>
 
         {error && (
-          <div className="flex items-center space-x-2 bg-rose-500/10 border border-rose-500/30 text-rose-450 p-3 rounded-lg text-sm mb-6">
+          <div className="flex items-center space-x-2 bg-rose-500/10 border border-rose-500/30 text-rose-400 p-3 rounded-lg text-sm mb-6">
             <FiAlertCircle className="shrink-0 w-5 h-5" />
             <span>{error}</span>
           </div>

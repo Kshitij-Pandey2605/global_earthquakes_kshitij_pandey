@@ -34,8 +34,8 @@ const createSendToken = async (user, statusCode, res) => {
       Date.now() + (parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 7) * 24 * 60 * 60 * 1000
     ),
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || res.req.secure || res.req.headers['x-forwarded-proto'] === 'https',
-    sameSite: 'strict'
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
   };
 
   res.cookie('jwt', accessToken, cookieOptions);
@@ -295,8 +295,8 @@ const refreshToken = asyncHandler(async (req, res, next) => {
       Date.now() + (parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 7) * 24 * 60 * 60 * 1000
     ),
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || res.req.secure || res.req.headers['x-forwarded-proto'] === 'https',
-    sameSite: 'strict'
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
   };
 
   res.cookie('jwt', newAccessToken, cookieOptions);

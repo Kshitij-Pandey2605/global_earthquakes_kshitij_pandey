@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../services/api';
+import EarthquakeMap from '../components/EarthquakeMap';
 import {
   FiActivity,
   FiTrendingUp,
@@ -26,6 +27,7 @@ import {
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
+  const [mapEvents, setMapEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,9 +36,10 @@ const Dashboard = () => {
       setLoading(true);
       setError('');
       try {
-        const [statsRes, recentRes] = await Promise.all([
+        const [statsRes, recentRes, mapRes] = await Promise.all([
           API.get('/earthquakes/stats'),
-          API.get('/earthquakes?limit=5&sort=time&order=desc')
+          API.get('/earthquakes?limit=5&sort=time&order=desc'),
+          API.get('/earthquakes?limit=100&sort=time&order=desc')
         ]);
 
         if (statsRes.data?.status === 'success') {
@@ -44,6 +47,9 @@ const Dashboard = () => {
         }
         if (recentRes.data?.status === 'success') {
           setRecent(recentRes.data.data.earthquakes || []);
+        }
+        if (mapRes.data?.status === 'success') {
+          setMapEvents(mapRes.data.data.earthquakes || []);
         }
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
@@ -152,6 +158,23 @@ const Dashboard = () => {
             <h4 className="text-2xl font-bold text-slate-800">{summary.maxDepth || 0} km</h4>
           </div>
         </div>
+      </div>
+
+      {/* Interactive World Map */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Seismic Activity Map</h3>
+            <p className="text-xs text-slate-450">Visualizing the 100 most recent global earthquakes.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
+            <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-red-650 mr-1.5"></span>&ge; 6.5</span>
+            <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 mr-1.5"></span>5.5 - 6.4</span>
+            <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-amber-600 mr-1.5"></span>4.8 - 5.4</span>
+            <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600 mr-1.5"></span>&lt; 4.8</span>
+          </div>
+        </div>
+        <EarthquakeMap earthquakes={mapEvents} height="400px" />
       </div>
 
       {/* Analytics Charts */}

@@ -6,7 +6,6 @@ const API = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Send cookies if using cookie storage
 });
 
 // Request Interceptor: Attach JWT Access Token from local storage
