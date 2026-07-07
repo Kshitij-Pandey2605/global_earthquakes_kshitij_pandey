@@ -31,7 +31,9 @@ module.exports = {
     refreshExpire: process.env.JWT_REFRESH_EXPIRE || '7d'
   },
   cors: {
-    origin: process.env.CORS_ORIGIN || '*'
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : '*'
   },
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 900000,

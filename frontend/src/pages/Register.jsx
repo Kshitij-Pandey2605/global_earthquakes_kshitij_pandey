@@ -78,6 +78,8 @@ const Register = () => {
               </span>
               <input
                 type="text"
+                name="name"
+                autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="John Doe"
@@ -97,6 +99,8 @@ const Register = () => {
               </span>
               <input
                 type="email"
+                name="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="developer@example.com"
@@ -116,6 +120,8 @@ const Register = () => {
               </span>
               <input
                 type="password"
+                name="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
