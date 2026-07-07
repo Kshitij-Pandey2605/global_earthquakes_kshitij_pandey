@@ -30,7 +30,7 @@ router.route('/')
 // GET    /earthquakes/stats → authenticated, cached 60s, rate-limited
 router.route('/stats')
   .head(protect, (req, res) => res.status(200).end())
-  .get(protect, analyticsLimiter, cache(60), earthquakeController.getEarthquakeStats);
+  .get(analyticsLimiter, cache(60), earthquakeController.getEarthquakeStats);
 
 // ── Document routes ─────────────────────────────────────────────────────────
 // HEAD   /earthquakes/:id → check existence without body
